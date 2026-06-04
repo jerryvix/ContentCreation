@@ -1,0 +1,19 @@
+{
+  "name": "tiktok-pipeline",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.100.1",
+    "apify-client": "^2.23.4",
+    "dotenv": "^17.4.2",
+    "node-cron": "^4.2.1",
+    "nodemailer": "^8.0.10"
+  }
+}
