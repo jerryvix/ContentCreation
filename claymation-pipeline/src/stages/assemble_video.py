@@ -1,0 +1,153 @@
+"""
+Stages 5 + 6: caption overlay and final video assembly.
+
+Inputs:
+- script JSON with scene list and per-scene narration
+- voiceover.mp3 from Stage 3
+- per-scene media from Stage 4 (PNG image or pre-rendered MP4)
+
+Output:
+- final.mp4 in 1080x1920 (TikTok vertical) with Ken Burns zoom on image
+  scenes, scene-segment captions burned in (submagic cyan highlight),
+  voiceover audio mixed in, total duration matched to the voiceover.
+
+Captions: rather than calling Whisper (which would re-transcribe what we
+already wrote), we use scene narration text segmented across the audio
+duration proportionally. Submagic-style: cyan highlight on currently
+spoken word group, bold sans on dark.
+"""
+
+import json
+import shlex
+import subprocess
+from pathlib import Path
+
+W, H = 1080, 1920
+FPS = 30
+PER_SCENE_S = 6
+
+
+def _run(cmd: list[str]) -> None:
+    print(f"      $ {' '.join(shlex.quote(c) for c in cmd)}")
+    subprocess.run(cmd, check=True, capture_output=True)
+
+
+def _audio_duration(path: Path) -> float:
+    out = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+         "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    return float(out)
+
+
+def _ken_burns_clip(image_path: Path, out_path: Path, duration: float) -> None:
+    """Render a Ken Burns zoom-in MP4 clip from a still image."""
+    frames = int(duration * FPS)
+    zoom_per_frame = 0.0008
+    # zoompan: zoom from 1.0 to ~1 + (0.0008 * frames). scale to 1080x1920.
+    vf = (
+        f"scale=2160:3840:force_original_aspect_ratio=increase,"
+        f"crop=2160:3840,"
+        f"zoompan=z='min(zoom+{zoom_per_frame},1.25)':d={frames}:s={W}x{H}:fps={FPS}"
+    )
+    _run([
+        "ffmpeg", "-y", "-loop", "1", "-i", str(image_path),
+        "-vf", vf, "-c:v", "libx264", "-t", f"{duration:.3f}",
+        "-pix_fmt", "yuv420p", "-r", str(FPS), str(out_path),
+    ])
+
+
+def _normalize_video_clip(in_path: Path, out_path: Path, duration: float) -> None:
+    vf = (
+        f"scale={W}:{H}:force_original_aspect_ratio=increase,"
+        f"crop={W}:{H},fps={FPS}"
+    )
+    _run([
+        "ffmpeg", "-y", "-i", str(in_path), "-vf", vf,
+        "-t", f"{duration:.3f}", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+        "-an", str(out_path),
+    ])
+
+
+def _build_concat_list(clip_paths: list[Path], list_path: Path) -> None:
+    list_path.write_text("\n".join(f"file '{p.as_posix()}'" for p in clip_paths))
+
+
+def _drawtext_filter_for_scenes(scenes: list[dict], scene_duration: float) -> str:
+    """
+    Build a chained drawtext filter that shows each scene's narration as
+    a centered submagic-style caption, cyan highlight, only during that
+    scene window.
+    """
+    parts = []
+    for i, sc in enumerate(scenes):
+        text = sc["narration"].replace("'", "’").replace(":", " -").replace("\n", " ")
+        text = text.replace("\\", "\\\\")
+        start = i * scene_duration
+        end = (i + 1) * scene_duration
+        parts.append(
+            "drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:"
+            f"text='{text}':"
+            "fontcolor=white:fontsize=58:"
+            "borderw=4:bordercolor=black:"
+            "box=1:boxcolor=0x00E5FF@0.85:boxborderw=18:"
+            "x=(w-text_w)/2:y=h*0.78:"
+            f"enable='between(t,{start:.2f},{end:.2f})'"
+        )
+    return ",".join(parts)
+
+
+def assemble_video(
+    script: dict,
+    voiceover_path: Path,
+    broll_result: dict,
+    out_dir: Path,
+) -> Path:
+    """
+    Assemble final.mp4. Returns the path.
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    work = out_dir / "_work"
+    work.mkdir(exist_ok=True)
+
+    audio_duration = _audio_duration(voiceover_path)
+    n_scenes = len(script["scenes"])
+    per_scene = audio_duration / n_scenes
+
+    broll_by_scene = {s["scene_number"]: s for s in broll_result["scenes"]}
+    normalized_clips: list[Path] = []
+    for sc in script["scenes"]:
+        n = sc["scene_number"]
+        media = broll_by_scene[n]
+        clip_out = work / f"scene_{n:02d}.mp4"
+        media_path = Path(media["media"])
+        if media["kind"] == "image":
+            _ken_burns_clip(media_path, clip_out, per_scene)
+        else:
+            _normalize_video_clip(media_path, clip_out, per_scene)
+        normalized_clips.append(clip_out)
+
+    concat_list = work / "concat.txt"
+    _build_concat_list(normalized_clips, concat_list)
+
+    silent_video = work / "silent.mp4"
+    _run([
+        "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(concat_list),
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", str(silent_video),
+    ])
+
+    captioned = work / "captioned.mp4"
+    drawtext = _drawtext_filter_for_scenes(script["scenes"], per_scene)
+    _run([
+        "ffmpeg", "-y", "-i", str(silent_video),
+        "-vf", drawtext, "-c:v", "libx264", "-pix_fmt", "yuv420p", str(captioned),
+    ])
+
+    final = out_dir / "final.mp4"
+    _run([
+        "ffmpeg", "-y", "-i", str(captioned), "-i", str(voiceover_path),
+        "-c:v", "copy", "-c:a", "aac", "-shortest", str(final),
+    ])
+
+    return final

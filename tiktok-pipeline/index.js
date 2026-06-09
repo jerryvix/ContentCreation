@@ -213,9 +213,9 @@ function aggregate(youtube, twitter, instagram) {
 // STEP 3 — SCORE with Claude, pick top 3 stories
 // ============================================================
 
-async function scoreStories(aggregatedText) {
+async function scoreStories(aggregatedText, topN = 2) {
   const systemPrompt =
-    'You are a news editor for @chatjerrpt, a TikTok account about AI strategy and business impact. Review the content and select the 3 best stories for TikTok posts. Score each on: news freshness, business relevance, and second-order potential (non-obvious downstream impact on companies or workers). Return ONLY a valid JSON array of the top 3 with fields: title, source, url, summary (2 sentences max), second_order_angle (the non-obvious take in one sentence). No extra text. No markdown. Just the JSON array.';
+    `You are a news editor for @chatjerrpt, a TikTok account about AI strategy and business impact. Review the content and select the ${topN} best stories for TikTok posts. Score each on: news freshness, business relevance, and second-order potential (non-obvious downstream impact on companies or workers). Return ONLY a valid JSON array of the top ${topN} with fields: title, source, url, summary (2 sentences max), second_order_angle (the non-obvious take in one sentence). No extra text. No markdown. Just the JSON array.`;
 
   const callClaude = async (extraInstruction = '') => {
     const userMsg = extraInstruction
@@ -264,7 +264,7 @@ HARD RULES — NEVER BREAK THESE:
 - Always name the specific source (Dan Martell's latest video, not 'a recent video')
 - Second-order take must be genuinely non-obvious. Not the headline implication. The one level deeper that most people skip.
 
-For each of the 3 stories produce exactly this structure, labeled clearly:
+For each selected story produce exactly this structure, labeled clearly:
 
 --- POST 1 ---
 
@@ -298,10 +298,9 @@ Slide 2 [Context]: HEADLINE | Supporting line with specific stat or name | Visua
 Slide 3 [The insight]: HEADLINE | The non-obvious implication in one sentence | Visual: accent color on key phrase
 Slide 4 [Close]: HEADLINE (punchy, 4-6 words) | Visual: minimal, bold typography, no clutter
 
---- POST 2 --- [same structure]
---- POST 3 --- [same structure]`;
+--- POST 2 --- [same structure]`;
 
-  const userMsg = `Here are today's 3 selected stories: ${JSON.stringify(stories, null, 2)}\nDraft all 3 post packages now.`;
+  const userMsg = `Here are today's selected stories (${stories.length}): ${JSON.stringify(stories, null, 2)}\nDraft all post packages now.`;
 
   const res = await anthropic.messages.create({
     model: CLAUDE_MODEL,
@@ -319,7 +318,7 @@ Slide 4 [Close]: HEADLINE (punchy, 4-6 words) | Visual: minimal, bold typography
 
 // Mechanical checks for rules a regex can catch. Claude handles
 // the judgment calls (voice, source naming, second-order depth).
-function validateDrafts(text) {
+function validateDrafts(text, expectedPosts = 2) {
   const violations = [];
   if (text.includes('—')) violations.push('Contains an em dash, hard rule says never use them');
   const lower = text.toLowerCase();
@@ -329,7 +328,7 @@ function validateDrafts(text) {
   });
   if (/#GoogleAI\b/i.test(text)) violations.push('Uses #GoogleAI, must use #Gemini instead');
   const posts = text.split(/--- POST \d+ ---/).slice(1);
-  if (posts.length !== 3) violations.push(`Expected 3 posts, found ${posts.length}`);
+  if (posts.length !== expectedPosts) violations.push(`Expected ${expectedPosts} posts, found ${posts.length}`);
   posts.forEach((p, i) => {
     const tagLine = p.split('\n').find((l) => l.trim().startsWith('#')) || '';
     const count = (tagLine.match(/#[A-Za-z0-9_]+/g) || []).length;
@@ -353,7 +352,7 @@ async function selfReviewDrafts(draftText) {
 - Voice: sharp business analyst at a bar. Direct, specific, slightly skeptical. Not corporate, not academic
 
 If the drafts fully comply with every rule, reply with exactly: PASS
-Otherwise return the COMPLETE corrected drafts, all 3 posts in full with the same structure, fixing only what violates the rules. No commentary, no preamble, just PASS or the full corrected text.`;
+Otherwise return the COMPLETE corrected drafts, all posts in full with the same structure, fixing only what violates the rules. No commentary, no preamble, just PASS or the full corrected text.`;
 
   let current = draftText;
   for (let round = 1; round <= 3; round++) {
@@ -458,12 +457,12 @@ async function runPipeline() {
     console.log(`  Aggregated block: ${aggregated.length} chars`);
 
     step = 'score';
-    console.log('Step 3: scoring with Claude...');
-    const stories = await scoreStories(aggregated);
+    console.log('Step 3: scoring with Claude (top 2)...');
+    const stories = await scoreStories(aggregated, 2);
     console.log(`  Got ${stories.length} stories`);
 
     step = 'draft';
-    console.log('Step 4: drafting 3 post packages...');
+    console.log('Step 4: drafting post packages...');
     let draftText = await draftPosts(stories);
     console.log(`  Drafted (${draftText.length} chars)`);
 

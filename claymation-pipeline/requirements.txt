@@ -3,3 +3,5 @@ google-genai
 elevenlabs
 openai
 python-dotenv
+httpx
+pillow
