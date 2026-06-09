@@ -1,0 +1,7 @@
+Anthropic filed a confidential draft S-1 with the SEC on June 1, 2026. OpenAI followed with its own confidential IPO filing on June 8, 2026. The two largest AI labs filed within a week of each other, and the timing is not a coincidence.
+
+Anthropic is already showing a roughly $47 billion revenue run-rate as of May 2026, up from about $10 billion the year before, roughly 5x annual growth. Both companies are racing to lock in public market valuations before the competitive window shifts.
+
+The non-obvious angle: once these S-1s become public, it will be the first time real AI infrastructure financials get priced by public markets. The disclosures will show exactly how fast the underlying models are commoditizing. Every enterprise SaaS company that has spent two years telling investors their AI features create defensible differentiation is suddenly going to have a comparables problem. The companies most exposed are the ones sitting on generic AI features with no proprietary data underneath them. The dual IPO race isn't really about which lab gets the better valuation. It's about which filing forces the larger correction in the SaaS companies that ride on top of them.
+
+Source: TechCrunch, SEC filing reports June 1 and June 8 2026.

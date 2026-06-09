@@ -1,0 +1,7 @@
+On June 2, 2026, OpenAI launched six role-specific Codex business plugins: data analytics, creative production, sales, product design, public equity investing, and investment banking. The investment banking plugin handles pitch prep, comparable companies and transactions analysis, and turns diligence work into client-ready recommendations. That's a first-year IB analyst's job description in a single bullet.
+
+OpenAI also confirmed Codex now has more than 5 million weekly active users, up 6x since its February desktop launch. Non-developers (analysts, marketers, operators, designers, researchers, investors, bankers) make up about 20 percent of users and are growing more than 3x faster than developers. OpenAI also added a Sites feature that hosts Codex output as interactive websites.
+
+The non-obvious angle: the popular narrative says AI displaces engineers first. The actual usage data says the opposite. The real pressure point right now is mid-level white-collar analysts and associates in finance, sales, and marketing. These roles get hired in bulk at $80K to $150K, which makes the replacement math very easy for CFOs. The first sign won't be public layoff announcements. It will be associate-level hiring freezes that nobody talks about publicly.
+
+Source: TechCrunch, OpenAI announcement, VentureBeat coverage June 2 2026.

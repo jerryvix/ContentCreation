@@ -1,0 +1,7 @@
+At WWDC 2026, Apple announced Google Gemini as the default AI model powering the new Siri assistant across iOS 27, iPadOS 27, and macOS 27. The bigger story is what they built underneath: a public Swift interface called the LanguageModel protocol that lets any app swap between ChatGPT, Claude, and Gemini with no code changes. Anthropic and Google are the first two providers implementing it.
+
+Apple also added an Extensions section in the App Store where users can pick a different AI model as the default for Apple Intelligence features like Writing Tools and Image Playground. The reach is over 2 billion active Apple devices.
+
+The non-obvious angle: this commoditizes the model layer. When AI models become interchangeable infrastructure, the margin moves to whoever owns the app relationship and the user data sitting on top of the device. Google gets the default slot in iOS 27 but Apple keeps the leverage. The model makers collect API fees while Apple collects everything else. The most valuable AI company in 2027 might be the one that owns the surface, not the one that builds the brain.
+
+Source: WWDC 2026 keynote, Tom's Guide, Digital Trends, TechTimes coverage June 9 2026.
