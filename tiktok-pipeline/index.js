@@ -22,7 +22,8 @@ const {
 
 const apify = new ApifyClient({ token: APIFY_TOKEN });
 const anthropic = new Anthropic({ apiKey: ANTHROPIC_KEY });
-const CLAUDE_MODEL = 'claude-sonnet-4-20250514';
+// claude-sonnet-4-20250514 reaches end-of-life June 15, 2026
+const CLAUDE_MODEL = 'claude-sonnet-4-6';
 
 // Helpers
 const tenDaysAgoISO = () => {
@@ -312,6 +313,81 @@ Slide 4 [Close]: HEADLINE (punchy, 4-6 words) | Visual: minimal, bold typography
 }
 
 // ============================================================
+// STEP 4.5 — SELF-REVIEW: check drafts against the hard content
+// rules, have Claude revise until they pass (max 3 rounds)
+// ============================================================
+
+// Mechanical checks for rules a regex can catch. Claude handles
+// the judgment calls (voice, source naming, second-order depth).
+function validateDrafts(text) {
+  const violations = [];
+  if (text.includes('—')) violations.push('Contains an em dash, hard rule says never use them');
+  const lower = text.toLowerCase();
+  const banned = ["let's dive in", "that's it", 'in conclusion', 'let me know in the comments'];
+  banned.forEach((p) => {
+    if (lower.includes(p)) violations.push(`Contains banned phrase: "${p}"`);
+  });
+  if (/#GoogleAI\b/i.test(text)) violations.push('Uses #GoogleAI, must use #Gemini instead');
+  const posts = text.split(/--- POST \d+ ---/).slice(1);
+  if (posts.length !== 3) violations.push(`Expected 3 posts, found ${posts.length}`);
+  posts.forEach((p, i) => {
+    const tagLine = p.split('\n').find((l) => l.trim().startsWith('#')) || '';
+    const count = (tagLine.match(/#[A-Za-z0-9_]+/g) || []).length;
+    if (count !== 5) violations.push(`Post ${i + 1}: hashtag line has ${count} hashtags, rule requires exactly 5`);
+  });
+  return violations;
+}
+
+async function selfReviewDrafts(draftText) {
+  const reviewSystem = `You are the quality reviewer for @chatjerrpt TikTok drafts. Check the drafts against these HARD RULES:
+- No em dashes anywhere
+- No periods at end of bullet points
+- No AI-sounding openers or closers (Let's dive in, That's it, In conclusion)
+- Never say 'let me know in the comments'
+- Exactly 5 hashtags per post
+- #Gemini not #GoogleAI
+- Captions 150 to 200 words max
+- Every claim has a real number, name, or example
+- Sources named specifically
+- Second-order take is genuinely non-obvious, one level deeper than the headline implication
+- Voice: sharp business analyst at a bar. Direct, specific, slightly skeptical. Not corporate, not academic
+
+If the drafts fully comply with every rule, reply with exactly: PASS
+Otherwise return the COMPLETE corrected drafts, all 3 posts in full with the same structure, fixing only what violates the rules. No commentary, no preamble, just PASS or the full corrected text.`;
+
+  let current = draftText;
+  for (let round = 1; round <= 3; round++) {
+    const violations = validateDrafts(current);
+    console.log(
+      `  [Review] round ${round}: ${violations.length === 0 ? 'mechanical checks clean' : violations.join('; ')}`,
+    );
+    const userMsg =
+      (violations.length
+        ? `Automated checks found these violations, fix them along with anything else you catch:\n- ${violations.join('\n- ')}\n\n`
+        : '') + `DRAFTS:\n${current}`;
+    const res = await anthropic.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 3000,
+      system: reviewSystem,
+      messages: [{ role: 'user', content: userMsg }],
+    });
+    const out = res.content[0].text.trim();
+    if (out === 'PASS' && violations.length === 0) {
+      console.log(`  [Review] passed on round ${round}`);
+      return current;
+    }
+    if (out !== 'PASS') current = out;
+  }
+  const remaining = validateDrafts(current);
+  if (remaining.length) {
+    console.log(`  [Review] WARNING: still failing after 3 rounds: ${remaining.join('; ')}`);
+  } else {
+    console.log('  [Review] passed after revisions');
+  }
+  return current;
+}
+
+// ============================================================
 // STEP 5 — EMAIL DELIVERY via Gmail SMTP
 // ============================================================
 
@@ -388,8 +464,12 @@ async function runPipeline() {
 
     step = 'draft';
     console.log('Step 4: drafting 3 post packages...');
-    const draftText = await draftPosts(stories);
+    let draftText = await draftPosts(stories);
     console.log(`  Drafted (${draftText.length} chars)`);
+
+    step = 'review';
+    console.log('Step 4.5: self-review against content rules...');
+    draftText = await selfReviewDrafts(draftText);
     console.log('\n========== DRAFT PREVIEW ==========\n');
     console.log(draftText);
     console.log('\n========== END PREVIEW ==========\n');
@@ -410,10 +490,24 @@ async function runPipeline() {
 // STEP 6 — SCHEDULER (7:00 AM daily)
 // ============================================================
 
-cron.schedule('0 7 * * *', () => {
-  runPipeline();
-});
+// Scheduler only arms when run directly (node index.js), so the
+// pipeline functions can be required by test scripts without
+// kicking off a run.
+if (require.main === module) {
+  cron.schedule('0 7 * * *', () => {
+    runPipeline();
+  });
 
-console.log('Scheduler armed: pipeline will run every day at 7:00 AM.');
-console.log('Running once now as a test...\n');
-runPipeline();
+  console.log('Scheduler armed: pipeline will run every day at 7:00 AM.');
+  console.log('Running once now as a test...\n');
+  runPipeline();
+}
+
+module.exports = {
+  aggregate,
+  scoreStories,
+  draftPosts,
+  validateDrafts,
+  selfReviewDrafts,
+  runPipeline,
+};
