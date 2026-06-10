@@ -20,6 +20,7 @@ spoken word group, bold sans on dark.
 import json
 import shlex
 import subprocess
+import sys
 from pathlib import Path
 
 W, H = 1080, 1920
@@ -74,12 +75,41 @@ def _build_concat_list(clip_paths: list[Path], list_path: Path) -> None:
     list_path.write_text("\n".join(f"file '{p.as_posix()}'" for p in clip_paths))
 
 
+def _font_path_for_filter() -> str:
+    """
+    Return a fontfile value pre-escaped for ffmpeg's drawtext filter parser.
+    Drawtext uses ':' as an option separator, so on Windows we escape the
+    colon in 'C:/...' as 'C\\:/...' to keep ffmpeg happy.
+    """
+    if sys.platform.startswith("win"):
+        candidates = [
+            r"C\:/Windows/Fonts/arialbd.ttf",
+            r"C\:/Windows/Fonts/segoeuib.ttf",
+            r"C\:/Windows/Fonts/arial.ttf",
+        ]
+        for c in candidates:
+            real = c.replace(r"\:", ":")
+            if Path(real).exists():
+                return c
+    if sys.platform == "darwin":
+        for c in ["/System/Library/Fonts/Helvetica.ttc",
+                  "/Library/Fonts/Arial Bold.ttf"]:
+            if Path(c).exists():
+                return c
+    for c in ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+              "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf"]:
+        if Path(c).exists():
+            return c
+    raise RuntimeError("No usable bold font found for drawtext on this OS.")
+
+
 def _drawtext_filter_for_scenes(scenes: list[dict], scene_duration: float) -> str:
     """
     Build a chained drawtext filter that shows each scene's narration as
     a centered submagic-style caption, cyan highlight, only during that
     scene window.
     """
+    font = _font_path_for_filter()
     parts = []
     for i, sc in enumerate(scenes):
         text = sc["narration"].replace("'", "’").replace(":", " -").replace("\n", " ")
@@ -87,7 +117,7 @@ def _drawtext_filter_for_scenes(scenes: list[dict], scene_duration: float) -> st
         start = i * scene_duration
         end = (i + 1) * scene_duration
         parts.append(
-            "drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:"
+            f"drawtext=fontfile={font}:"
             f"text='{text}':"
             "fontcolor=white:fontsize=58:"
             "borderw=4:bordercolor=black:"
