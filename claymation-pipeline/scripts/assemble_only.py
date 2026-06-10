@@ -4,8 +4,9 @@ existing voiceover.mp3 + broll/ assets in output/. Skips voiceover
 and b-roll generation so no extra API spend.
 
 Usage:
-  python scripts/assemble_only.py              # all ready stories
+  python scripts/assemble_only.py                 # all ready stories
   python scripts/assemble_only.py --stories apple_gemini_swappable
+  python scripts/assemble_only.py --no-captions   # skip burned-in captions
 """
 
 import argparse
@@ -53,6 +54,8 @@ def ready(d: Path) -> bool:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--stories", default="", help="Comma-separated story names")
+    parser.add_argument("--no-captions", action="store_true",
+                        help="Skip burned-in captions, add them in TikTok's editor instead")
     args = parser.parse_args()
 
     out = ROOT / "output"
@@ -80,7 +83,8 @@ def main():
                 shutil.rmtree(work)
             script = json.loads((d / "script.json").read_text())
             broll = reconstruct_broll(d / "broll", script["scenes"])
-            final = assemble_video(script, d / "voiceover.mp3", broll, d)
+            final = assemble_video(script, d / "voiceover.mp3", broll, d,
+                                   captions=not args.no_captions)
             size = final.stat().st_size
             print(f"  OK: {final} ({size:,} bytes)")
             built.append((name, str(final)))

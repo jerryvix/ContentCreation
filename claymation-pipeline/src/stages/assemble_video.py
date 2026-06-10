@@ -133,9 +133,12 @@ def assemble_video(
     voiceover_path: Path,
     broll_result: dict,
     out_dir: Path,
+    captions: bool = True,
 ) -> Path:
     """
     Assemble final.mp4. Returns the path.
+    captions=False skips the drawtext overlay entirely (clean video,
+    add captions in TikTok's native editor instead).
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     work = out_dir / "_work"
@@ -167,16 +170,19 @@ def assemble_video(
         "-c:v", "libx264", "-pix_fmt", "yuv420p", str(silent_video),
     ])
 
-    captioned = work / "captioned.mp4"
-    drawtext = _drawtext_filter_for_scenes(script["scenes"], per_scene)
-    _run([
-        "ffmpeg", "-y", "-i", str(silent_video),
-        "-vf", drawtext, "-c:v", "libx264", "-pix_fmt", "yuv420p", str(captioned),
-    ])
+    if captions:
+        video_track = work / "captioned.mp4"
+        drawtext = _drawtext_filter_for_scenes(script["scenes"], per_scene)
+        _run([
+            "ffmpeg", "-y", "-i", str(silent_video),
+            "-vf", drawtext, "-c:v", "libx264", "-pix_fmt", "yuv420p", str(video_track),
+        ])
+    else:
+        video_track = silent_video
 
     final = out_dir / "final.mp4"
     _run([
-        "ffmpeg", "-y", "-i", str(captioned), "-i", str(voiceover_path),
+        "ffmpeg", "-y", "-i", str(video_track), "-i", str(voiceover_path),
         "-c:v", "copy", "-c:a", "aac", "-shortest", str(final),
     ])
 
