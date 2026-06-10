@@ -27,7 +27,7 @@ python scripts/run_all_today.py
 ## Stages
 - Stage 1 (done): script generation with self-review against content rules
 - Stage 3 (done): voiceover (ElevenLabs Daniel) from full_narration
-- Stage 4 (done): b-roll images per scene via OpenArt, automatic fallback to Gemini Veo 3 for video
+- Stage 4 (done): b-roll images per scene via Gemini Imagen 4, automatic fallback to Gemini Veo 3 if Imagen refuses a prompt
 - Stage 5 (done): captions overlaid via ffmpeg drawtext (submagic-style cyan highlight box)
 - Stage 6 (done): ffmpeg assembly with Ken Burns zoom on still images, voiceover mixed in, output 1080x1920 mp4
 - Stage 2 (deferred): character reference image — only Codex story has a `generic_role` archetype; current pipeline lets per-scene prompts carry the description
@@ -38,7 +38,7 @@ cd $HOME\ContentCreation\claymation-pipeline
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-# Fill .env with ANTHROPIC_API_KEY, OPENART_API_KEY, ELEVENLABS_API_KEY, GEMINI_API_KEY
+# Fill .env with ANTHROPIC_API_KEY, GEMINI_API_KEY, ELEVENLABS_API_KEY
 
 # Stage 1: scripts (already produced by earlier session for today's 3 stories)
 python scripts\run_all_today.py
@@ -53,4 +53,6 @@ Finished files land at:
 - `output\dual_ai_ipos\final.mp4`
 
 ## Provider fallback
-- OpenArt is the primary image provider for scene b-roll. On any failure (4xx, timeout, missing key) the pipeline automatically tries Gemini Veo 3 (`veo-3.0-fast-generate-001`) for that scene and notes the switch in `output/build_summary.json`.
+- **Primary**: Gemini Imagen 4 (`imagen-4.0-generate-001`) at 9:16 aspect for TikTok vertical. Roughly $0.04/image.
+- **Fallback**: Gemini Veo 3 fast tier (`veo-3.0-fast-generate-001`). Triggers per-scene if Imagen refuses the prompt (real-person likeness or other content policy). The switch is noted in `output/build_summary.json`.
+- OpenArt was the original target but they do not expose a public image-generation API; both paths run through `GEMINI_API_KEY`.
