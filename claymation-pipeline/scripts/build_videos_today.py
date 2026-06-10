@@ -15,6 +15,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from dotenv import load_dotenv
+load_dotenv(ROOT / ".env")
+
 from src.stages.generate_voiceover import generate_voiceover
 from src.stages.generate_broll import generate_broll
 from src.stages.assemble_video import assemble_video
