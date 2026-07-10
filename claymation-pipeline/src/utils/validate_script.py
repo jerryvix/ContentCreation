@@ -116,6 +116,7 @@ def validate_script(script: dict) -> list[str]:
             vs = sc.get("visual_source", "claymation")
             if vs not in VALID_VISUAL_SOURCES:
                 v.append(f"Scene {i}: visual_source '{vs}' invalid")
+    soundbite = script.get("soundbite_scene")
     if route == "interview":
         if not queries:
             v.append("interview route requires at least one footage_queries entry")
@@ -123,11 +124,17 @@ def validate_script(script: dict) -> list[str]:
             v.append(
                 f"interview route requires 2-4 footage scenes, found {len(footage_scenes)}"
             )
+        if soundbite not in footage_scenes:
+            v.append(
+                f"interview route requires soundbite_scene to be one of the footage scenes {footage_scenes}, got {soundbite}"
+            )
     if route == "claymation":
         if queries:
             v.append("claymation route must have empty footage_queries")
         if footage_scenes:
             v.append(f"claymation route must have no footage scenes, found {footage_scenes}")
+        if soundbite is not None:
+            v.append("claymation route must have soundbite_scene: null")
 
     vc = script.get("voice_config") or {}
     if vc.get("voice_id") != "Daniel" or vc.get("provider") != "elevenlabs":

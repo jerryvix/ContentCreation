@@ -52,12 +52,23 @@ Finished files land at:
 - `output\codex_analyst_replacement\final.mp4`
 - `output\dual_ai_ipos\final.mp4`
 
+## Self-bootstrap (hands-off scheduled runs)
+Every entry point (`run_all_today.py`, `build_videos_today.py`) starts with `src/utils/bootstrap.py`, which runs before any third-party import:
+1. `git fetch` + fast-forward pull if the local revision is behind origin, then re-exec so the updated code runs the same cycle (loop-guarded)
+2. probes every package in `REQUIRED_PACKAGES` via a subprocess import: installs missing ones, and repairs broken ones (upgrade + known transitive fixes like cffi/cryptography)
+3. verifies ffmpeg, attempting a winget (Windows) or apt (Linux) install
+
+New dependencies go in the `REQUIRED_PACKAGES` manifest, never in setup instructions. All bootstrap steps fail open except ffmpeg, which is a hard stop with a clear message. The daily run heals itself; the only escalations are credential failures, repeated content-policy refusals, and irrecoverable crashes.
+
 ## Visual routing (story type -> visual style)
 Claymation is a stand-in visual for when nothing real exists to show. If real footage of the key figure exists, it is more credible and specific than a generated illustration.
 
-1. **Interview / direct-quote content** (a key figure spoke on camera about this in the last 10 days): Stage 1 tags the script `visual_route: "interview"` with 1-3 YouTube search queries and marks 2-4 statement scenes `visual_source: "footage"`. Stage 4a searches via yt-dlp, keeps only uploads from the last 10 days, downloads 1-2 clips, trims each to a ~20s muted segment, and builds those scenes around the real footage. Clip attribution (title, channel, URL, date) is logged in `output/build_summary.json`.
-2. **No qualifying footage found** (nothing recent enough, download failures, or offline): automatic fallback to claymation. Stale or off-topic footage is never used, which is why every footage scene still carries a full claymation `broll_prompt`.
-3. **Article-based / text-only reporting** (nobody spoke on camera): `visual_route: "claymation"`, everything renders as before.
+1. **Interview / direct-quote content** (a key figure spoke on camera about this in the last 10 days): Stage 1 tags the script `visual_route: "interview"` with 1-3 YouTube search queries, marks 2-4 statement scenes `visual_source: "footage"`, and picks one as the `soundbite_scene`. Stage 4a searches via yt-dlp, keeps only uploads from the last 10 days, and downloads 1-2 clips. Stage 4b then transcribes the clip (Whisper), has Claude pick the sharpest on-topic 4-25s quote, and cuts it with its ORIGINAL audio. Assembly splices it in: voiceover part A -> real quote in the figure's own voice -> voiceover part B. Clip attribution and the chosen quote are logged in `output/build_summary.json`.
+2. **Soundbite extraction fails** (no OpenAI key, transcript empty, nothing on-topic): the clips still run as muted footage under continuous voiceover.
+3. **No qualifying footage found** (nothing recent enough, download failures, or offline): automatic fallback to claymation. Stale or off-topic footage is never used, which is why every footage scene still carries a full claymation `broll_prompt`.
+4. **Article-based / text-only reporting** (nobody spoke on camera): `visual_route: "claymation"`, everything renders as before.
+
+Captions are OFF by default everywhere (add them in TikTok's native editor); pass `--captions` to burn them in on non-soundbite timelines.
 
 ## Provider fallback (claymation scenes)
 - **Primary**: Gemini Imagen 4 (`imagen-4.0-generate-001`) at 9:16 aspect for TikTok vertical. Roughly $0.04/image.

@@ -11,6 +11,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+# Bootstrap BEFORE third-party imports: pulls code updates (re-exec) and
+# installs any missing dependencies so scheduled runs are hands-off.
+from src.utils.bootstrap import bootstrap
+bootstrap(restart_argv=sys.argv)
+
 from src.stages.generate_script import generate_script
 
 STORIES = [

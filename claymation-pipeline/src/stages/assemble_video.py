@@ -187,3 +187,87 @@ def assemble_video(
     ])
 
     return final
+
+
+# ---------------------------------------------------------------------
+# Soundbite timeline: [scenes 1..k + voiceover A] -> [real quote clip
+# with its own audio] -> [scenes k+1..n + voiceover B]
+# ---------------------------------------------------------------------
+
+def _build_scene_track(scenes: list[dict], broll_by_scene: dict,
+                       voiceover_path: Path, work: Path, tag: str) -> Path:
+    """Render a video+voiceover segment for a subset of scenes, encoded
+    with uniform params so segments concat cleanly."""
+    audio_duration = _audio_duration(voiceover_path)
+    per_scene = audio_duration / len(scenes)
+    clips = []
+    for sc in scenes:
+        n = sc["scene_number"]
+        media = broll_by_scene[n]
+        clip_out = work / f"{tag}_scene_{n:02d}.mp4"
+        if media["kind"] == "image":
+            _ken_burns_clip(Path(media["media"]), clip_out, per_scene)
+        else:
+            _normalize_video_clip(Path(media["media"]), clip_out, per_scene)
+        clips.append(clip_out)
+    concat_list = work / f"{tag}_concat.txt"
+    _build_concat_list(clips, concat_list)
+    silent = work / f"{tag}_silent.mp4"
+    _run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(concat_list),
+          "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", str(FPS), str(silent)])
+    seg = work / f"{tag}_segment.mp4"
+    _run(["ffmpeg", "-y", "-i", str(silent), "-i", str(voiceover_path),
+          "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", str(FPS),
+          "-c:a", "aac", "-ar", "44100", "-ac", "2", "-shortest", str(seg)])
+    return seg
+
+
+def _normalize_soundbite(soundbite_path: Path, work: Path) -> Path:
+    """Re-frame the quote clip to 1080x1920 keeping its ORIGINAL audio."""
+    seg = work / "bite_segment.mp4"
+    vf = f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},fps={FPS}"
+    _run(["ffmpeg", "-y", "-i", str(soundbite_path), "-vf", vf,
+          "-c:v", "libx264", "-pix_fmt", "yuv420p",
+          "-c:a", "aac", "-ar", "44100", "-ac", "2", str(seg)])
+    return seg
+
+
+def assemble_with_soundbite(
+    script: dict,
+    vo_a_path: Path,
+    vo_b_path: Path | None,
+    broll_result: dict,
+    soundbite_path: Path,
+    after_scene: int,
+    out_dir: Path,
+) -> Path:
+    """
+    Assemble final.mp4 with a real spoken soundbite spliced in after
+    `after_scene`: narration A plays over scenes 1..k, the quote plays
+    with its own audio, narration B plays over scenes k+1..n. Burned-in
+    captions are not supported on this path (timing would drift); use
+    TikTok's editor.
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    work = out_dir / "_work"
+    work.mkdir(exist_ok=True)
+
+    broll_by_scene = {s["scene_number"]: s for s in broll_result["scenes"]}
+    scenes_a = [sc for sc in script["scenes"] if sc["scene_number"] <= after_scene]
+    scenes_b = [sc for sc in script["scenes"] if sc["scene_number"] > after_scene]
+
+    segments = [
+        _build_scene_track(scenes_a, broll_by_scene, vo_a_path, work, "a"),
+        _normalize_soundbite(soundbite_path, work),
+    ]
+    if scenes_b and vo_b_path is not None:
+        segments.append(_build_scene_track(scenes_b, broll_by_scene, vo_b_path, work, "b"))
+
+    final_concat = work / "final_concat.txt"
+    _build_concat_list(segments, final_concat)
+    final = out_dir / "final.mp4"
+    # re-encode on the final concat: safest across segment boundaries
+    _run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(final_concat),
+          "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", str(FPS),
+          "-c:a", "aac", "-ar", "44100", "-ac", "2", str(final)])
+    return final

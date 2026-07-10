@@ -18,6 +18,7 @@ the build summary can carry attribution.
 import json
 import shutil
 import subprocess
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -28,15 +29,23 @@ SEARCH_LIMIT = 6           # results inspected per query
 SKIP_INTRO_FRACTION = 0.10 # start segment 10% in, past intros/titles
 
 
-def _yt_dlp() -> str | None:
-    return shutil.which("yt-dlp")
+def _yt_dlp() -> list[str] | None:
+    """Command prefix for yt-dlp. Falls back to module invocation so a
+    pip install done by the bootstrap in this same process still works
+    even if the console script isn't on PATH yet."""
+    if shutil.which("yt-dlp"):
+        return ["yt-dlp"]
+    try:
+        import yt_dlp  # noqa: F401
+        return [sys.executable, "-m", "yt_dlp"]
+    except ImportError:
+        return None
 
 
 def _search(query: str, days: int) -> list[dict]:
     """Return metadata for uploads within the freshness window."""
-    binpath = _yt_dlp()
-    cmd = [
-        binpath, f"ytsearch{SEARCH_LIMIT}:{query}",
+    cmd = _yt_dlp() + [
+        f"ytsearch{SEARCH_LIMIT}:{query}",
         "--dump-json", "--skip-download", "--no-warnings", "--no-playlist",
     ]
     try:
@@ -69,10 +78,13 @@ def _search(query: str, days: int) -> list[dict]:
 
 
 def source_footage(queries: list[str], out_dir: Path,
-                   days: int = 10, max_clips: int = 2) -> list[dict]:
+                   days: int = 10, max_clips: int = 2,
+                   keep_raw: bool = False) -> list[dict]:
     """
     Returns up to max_clips of:
       {"path": <trimmed mp4>, "url", "title", "channel", "upload_date"}
+    With keep_raw=True the full download is kept and returned as
+    "raw_path" (needed for soundbite extraction); caller cleans it up.
     Empty list means: fall back to claymation.
     """
     if not _yt_dlp():
@@ -101,7 +113,7 @@ def source_footage(queries: list[str], out_dir: Path,
         trimmed = out_dir / f"footage_{len(clips) + 1:02d}.mp4"
         print(f"      [Footage] downloading: {hit['title'][:70]} ({hit['upload_date']})")
         dl = subprocess.run(
-            [_yt_dlp(), hit["url"],
+            _yt_dlp() + [hit["url"],
              "-f", "mp4[height<=1080]/best[height<=1080]/best",
              "-o", str(raw), "--no-playlist", "--no-warnings"],
             capture_output=True, text=True, timeout=600,
@@ -116,17 +128,21 @@ def source_footage(queries: list[str], out_dir: Path,
              "-an", str(trimmed)],
             capture_output=True, timeout=300,
         )
-        raw.unlink(missing_ok=True)
+        if not keep_raw:
+            raw.unlink(missing_ok=True)
         if trim.returncode != 0 or not trimmed.exists():
             print(f"      [Footage] trim failed, trying next candidate")
             continue
-        clips.append({
+        clip = {
             "path": str(trimmed),
             "url": hit["url"],
             "title": hit["title"],
             "channel": hit["channel"],
             "upload_date": hit["upload_date"],
-        })
+        }
+        if keep_raw:
+            clip["raw_path"] = str(raw)
+        clips.append(clip)
     if not clips:
         print("      [Footage] every candidate failed to download, falling back")
     return clips

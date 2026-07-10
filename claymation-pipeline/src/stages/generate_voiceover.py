@@ -90,10 +90,11 @@ def _gemini_tts_generate(narration: str, out_path: Path, api_key: str) -> bool:
         return False
 
 
-def generate_voiceover(narration: str, out_dir: Path) -> dict:
+def generate_voiceover(narration: str, out_dir: Path,
+                       out_name: str = "voiceover.mp3") -> dict:
     """Returns {path, duration_seconds, provider, voice_id}."""
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / "voiceover.mp3"
+    out_path = out_dir / out_name
 
     eleven_key = os.environ.get("ELEVENLABS_API_KEY")
     gemini_key = os.environ.get("GEMINI_API_KEY")

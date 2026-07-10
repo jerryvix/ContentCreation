@@ -49,9 +49,10 @@ Claymation is a stand-in visual for when nothing real exists to show. If real fo
 For "interview" stories:
 - Provide 1-3 YouTube search queries that would find the actual footage. Include the figure's real name, the topic, and the format (e.g. "Sundar Pichai interview Siri Gemini WWDC 2026")
 - Mark 2-4 scenes (the statement/quote beats) with "visual_source": "footage". These scenes STILL need a full claymation broll_prompt as fallback in case no qualifying footage is found
+- Pick ONE of the footage scenes as "soundbite_scene": the beat where the video cuts to the figure actually speaking in their own voice. Write that scene's narration as a SETUP line that hands off to the quote (e.g. "Here's how he put it himself"). The quote plays right after that scene's narration
 - All other scenes get "visual_source": "claymation"
 
-For "claymation" stories: "footage_queries" is an empty list and every scene has "visual_source": "claymation".
+For "claymation" stories: "footage_queries" is an empty list, "soundbite_scene" is null, and every scene has "visual_source": "claymation".
 
 # Output schema
 {{
@@ -62,6 +63,7 @@ For "claymation" stories: "footage_queries" is an empty list and every scene has
   "inferences_made": ["<what you inferred, if anything>"],
   "visual_route": "interview" | "claymation",
   "footage_queries": ["<YouTube search queries, empty list if claymation route>"],
+  "soundbite_scene": <scene_number of the quote hand-off beat, or null for claymation route>,
   "character_profile": {{
     "type": "real_person" | "generic_role" | "none",
     "name_internal": "<reference only, never in prompts>",
