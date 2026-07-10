@@ -76,13 +76,16 @@ def _gemini_veo_generate(prompt: str, out_path: Path, api_key: str) -> bool:
         return False
 
 
-def generate_broll(scenes: list[dict], out_dir: Path) -> dict:
+def generate_broll(scenes: list[dict], out_dir: Path,
+                   footage_map: dict | None = None) -> dict:
     """
     For each scene, generate b-roll media. Saves:
       out_dir/scene_<n>.png  (Imagen path)
       out_dir/scene_<n>.mp4  (Veo fallback path)
+    footage_map optionally maps scene_number -> pre-sourced real footage
+    clip path (interview route); those scenes skip generation entirely.
     Returns:
-      {"provider": "imagen" | "veo" | "mixed",
+      {"provider": "imagen" | "veo" | "footage" | "mixed",
        "scenes": [{"scene_number":..,"media":..,"kind":"image"|"video"}, ...]}
     """
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -93,12 +96,19 @@ def generate_broll(scenes: list[dict], out_dir: Path) -> dict:
             "and Veo 3 (fallback) b-roll generation."
         )
 
+    footage_map = footage_map or {}
     results = []
     providers_used = set()
 
     for sc in scenes:
         n = sc["scene_number"]
         prompt = sc["broll_prompt"]
+
+        if n in footage_map:
+            print(f"    [Scene {n}] using sourced real footage")
+            results.append({"scene_number": n, "media": str(footage_map[n]), "kind": "video"})
+            providers_used.add("footage")
+            continue
         img_path = out_dir / f"scene_{n:02d}.png"
         vid_path = out_dir / f"scene_{n:02d}.mp4"
 

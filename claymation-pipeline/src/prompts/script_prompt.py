@@ -41,6 +41,18 @@ Every scene prompt MUST start with this exact prefix:
 
 Then describe scene + character reference + camera + motion. Under 60 words after prefix.
 
+# Visual routing
+Claymation is a stand-in visual for when nothing real exists to show. If real footage of the key figure speaking exists, that footage is more credible and specific than a generated illustration. Classify this story:
+- "interview": a specific key figure has spoken about this story ON CAMERA within the last 10 days (interview, keynote, press conference, recorded exec statement) and real footage of them saying it likely exists
+- "claymation": article-based or text-only reporting, no on-camera statements exist
+
+For "interview" stories:
+- Provide 1-3 YouTube search queries that would find the actual footage. Include the figure's real name, the topic, and the format (e.g. "Sundar Pichai interview Siri Gemini WWDC 2026")
+- Mark 2-4 scenes (the statement/quote beats) with "visual_source": "footage". These scenes STILL need a full claymation broll_prompt as fallback in case no qualifying footage is found
+- All other scenes get "visual_source": "claymation"
+
+For "claymation" stories: "footage_queries" is an empty list and every scene has "visual_source": "claymation".
+
 # Output schema
 {{
   "topic": "<short description of the story>",
@@ -48,6 +60,8 @@ Then describe scene + character reference + camera + motion. Under 60 words afte
   "narrative_arc": "<one-sentence summary of the shape>",
   "cuts_made": ["<what you cut, if anything>"],
   "inferences_made": ["<what you inferred, if anything>"],
+  "visual_route": "interview" | "claymation",
+  "footage_queries": ["<YouTube search queries, empty list if claymation route>"],
   "character_profile": {{
     "type": "real_person" | "generic_role" | "none",
     "name_internal": "<reference only, never in prompts>",
@@ -57,6 +71,7 @@ Then describe scene + character reference + camera + motion. Under 60 words afte
     {{
       "scene_number": 1,
       "narration": "<~15 words>",
+      "visual_source": "footage" | "claymation",
       "broll_prompt": "<full prompt with style prefix>",
       "camera": "wide_shot" | "medium_shot" | "close_up" | "over_shoulder",
       "motion_level": "subtle" | "moderate" | "high"
@@ -80,7 +95,8 @@ Then describe scene + character reference + camera + motion. Under 60 words afte
 3. Narration 125-160 words?
 4. Style prefix on every scene?
 5. No real names in visual prompts?
-6. Valid JSON?
+6. visual_route correct? (interview only if someone actually spoke on camera in the last 10 days)
+7. Valid JSON?
 
 Output only the JSON."""
 

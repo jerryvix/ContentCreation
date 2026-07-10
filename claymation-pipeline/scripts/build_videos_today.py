@@ -20,6 +20,7 @@ load_dotenv(ROOT / ".env")
 
 from src.stages.generate_voiceover import generate_voiceover
 from src.stages.generate_broll import generate_broll
+from src.stages.source_footage import source_footage
 from src.stages.assemble_video import assemble_video
 
 
@@ -37,8 +38,29 @@ def run_for_story(name: str) -> dict:
     vo = generate_voiceover(script["full_narration"], out_dir)
     print(f"    {vo['path']} ({vo['duration_seconds']:.1f}s, {vo['provider']})")
 
+    # Visual routing: interview stories try real footage first, then
+    # fall back to claymation if nothing from the last 10 days exists.
+    route = script.get("visual_route", "claymation")
+    footage_map = {}
+    sourced_clips = []
+    if route == "interview":
+        print("  Stage 4a: sourcing real footage (interview route)...")
+        sourced_clips = source_footage(
+            script.get("footage_queries", []), out_dir / "footage"
+        )
+        if sourced_clips:
+            footage_scene_nums = [
+                sc["scene_number"] for sc in script["scenes"]
+                if sc.get("visual_source") == "footage"
+            ]
+            for i, n in enumerate(footage_scene_nums):
+                footage_map[n] = sourced_clips[i % len(sourced_clips)]["path"]
+            print(f"    {len(sourced_clips)} clip(s) sourced, covering scenes {footage_scene_nums}")
+        else:
+            print("    no qualifying footage from the last 10 days, falling back to claymation")
+
     print("  Stage 4: b-roll...")
-    broll = generate_broll(script["scenes"], out_dir / "broll")
+    broll = generate_broll(script["scenes"], out_dir / "broll", footage_map=footage_map)
     print(f"    provider: {broll['provider']}, scenes: {len(broll['scenes'])}")
 
     print("  Stages 5+6: caption + assemble...")
@@ -50,6 +72,12 @@ def run_for_story(name: str) -> dict:
         "final": str(final),
         "voiceover": vo,
         "broll_provider": broll["provider"],
+        "visual_route": route,
+        "footage_used": bool(footage_map),
+        "sourced_clips": [
+            {k: c[k] for k in ("url", "title", "channel", "upload_date")}
+            for c in sourced_clips
+        ],
     }
 
 
@@ -74,7 +102,12 @@ def main():
 
     print(f"\n{'='*60}\nSUMMARY\n{'='*60}")
     for s in summary:
-        print(f"  {s['name']}: {s['final']} | b-roll: {s['broll_provider']}")
+        route_note = s.get("visual_route", "claymation")
+        if route_note == "interview" and not s.get("footage_used"):
+            route_note = "interview -> claymation fallback"
+        print(f"  {s['name']}: {s['final']} | b-roll: {s['broll_provider']} | route: {route_note}")
+        for c in s.get("sourced_clips", []):
+            print(f"    clip: {c['title'][:60]} | {c['channel']} | {c['upload_date']} | {c['url']}")
     for name, err in failed:
         print(f"  {name}: FAILED ({err})")
 

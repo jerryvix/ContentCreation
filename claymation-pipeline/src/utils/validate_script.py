@@ -20,6 +20,8 @@ REQUIRED_KEYS = {
     "narrative_arc",
     "cuts_made",
     "inferences_made",
+    "visual_route",
+    "footage_queries",
     "character_profile",
     "scenes",
     "full_narration",
@@ -27,6 +29,9 @@ REQUIRED_KEYS = {
     "caption_style",
     "voice_config",
 }
+
+VALID_ROUTES = {"interview", "claymation"}
+VALID_VISUAL_SOURCES = {"footage", "claymation"}
 
 VALID_CAMERAS = {"wide_shot", "medium_shot", "close_up", "over_shoulder"}
 VALID_MOTION = {"subtle", "moderate", "high"}
@@ -97,6 +102,32 @@ def validate_script(script: dict) -> list[str]:
     for phrase in BANNED_PHRASES:
         if phrase in lower_blob:
             v.append(f'Banned phrase found in narration: "{phrase}"')
+
+    route = script.get("visual_route")
+    queries = script.get("footage_queries", []) or []
+    footage_scenes = [
+        sc.get("scene_number") for sc in scenes
+        if isinstance(sc, dict) and sc.get("visual_source") == "footage"
+    ]
+    if route not in VALID_ROUTES:
+        v.append(f"visual_route '{route}' invalid, must be interview or claymation")
+    for i, sc in enumerate(scenes, 1):
+        if isinstance(sc, dict):
+            vs = sc.get("visual_source", "claymation")
+            if vs not in VALID_VISUAL_SOURCES:
+                v.append(f"Scene {i}: visual_source '{vs}' invalid")
+    if route == "interview":
+        if not queries:
+            v.append("interview route requires at least one footage_queries entry")
+        if not (2 <= len(footage_scenes) <= 4):
+            v.append(
+                f"interview route requires 2-4 footage scenes, found {len(footage_scenes)}"
+            )
+    if route == "claymation":
+        if queries:
+            v.append("claymation route must have empty footage_queries")
+        if footage_scenes:
+            v.append(f"claymation route must have no footage scenes, found {footage_scenes}")
 
     vc = script.get("voice_config") or {}
     if vc.get("voice_id") != "Daniel" or vc.get("provider") != "elevenlabs":
